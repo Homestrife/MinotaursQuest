@@ -91,8 +91,8 @@
 		return 4.5;
 	};
 	
-	Game_CharacterBase.prototype.canPass = function(x, y, d) {
-		const dist = this.distancePerFrame();
+	Game_CharacterBase.prototype.canPass = function(x, y, d, dist) {
+		if(dist === undefined || dist === null || Number.isNaN(dist)) { dist = this.distancePerFrame(); }
 		const x2 = $gameMap.roundXWithDirection(x, d, dist);
 		const y2 = $gameMap.roundYWithDirection(y, d, dist);
 		if (!$gameMap.isValid(x2, y2)) {
@@ -135,8 +135,8 @@
 		}
 	};
 	
-	Game_CharacterBase.prototype.isMapPassable = function(x, y, d) {
-		const dist = this.distancePerFrame();
+	Game_CharacterBase.prototype.isMapPassable = function(x, y, d, dist) {
+		if(dist === undefined || dist === null || Number.isNaN(dist)) { dist = this.distancePerFrame(); }
 		const x2 = $gameMap.roundXWithDirection(x, d, dist);
 		const y2 = $gameMap.roundYWithDirection(y, d, dist);
 		const d2 = this.reverseDir(d);
@@ -168,6 +168,39 @@
 			this._realY = this._y;
 			this._y = $gameMap.roundY(Math.floor(this._y));
 			break;
+		}
+		
+		if(
+			((d === 4 || d === 6) && this._realX !== this._x) ||
+			((d === 2 || d === 8) && this._realY !== this._y)
+		) {
+			// let the push up against the wall resolve and handle sliding around corners on a later frame
+			return;
+		}
+		
+		// slide along the obstacle if near a corner, to automatically move around it
+		const slideLimit = 0.75;
+		const decX = this._x % 1;
+		const decY = this._y % 1;
+		const dist = this.distancePerFrame();
+		if(decX !== 0) {
+			const x1 = $gameMap.roundX(Math.floor(this._x));
+			const x2 = $gameMap.roundX(Math.ceil(this._x));
+			this._realX = this._x;
+			if(decX < slideLimit && this.canPass(x1, this._y, d)) {
+				this._x = dist > decX ? x1 : $gameMap.roundXWithDirection(this._x, 4, dist);
+			} else if(decX > 1 - slideLimit && this.canPass(x2, this._y, d)) {
+				this._x = dist > 1 - decX ? x2 : $gameMap.roundXWithDirection(this._x, 6, dist);
+			}
+		} else if(decY !== 0) {
+			const y1 = $gameMap.roundY(Math.floor(this._y));
+			const y2 = $gameMap.roundY(Math.ceil(this._y));
+			this._realY = this._y;
+			if(decY < slideLimit && this.canPass(this._x, y1, d)) {
+				this._y = dist > decY ? y1 : $gameMap.roundYWithDirection(this._y, 8, dist);
+			} else if(decX > 1 - slideLimit && this.canPass(this._x, y2, d)) {
+				this._y = dist > 1 - decY ? y2 : $gameMap.roundYWithDirection(this._y, 2, dist);
+			}
 		}
 	};
 	
