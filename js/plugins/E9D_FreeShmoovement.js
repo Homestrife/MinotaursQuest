@@ -37,26 +37,47 @@
 		return this.roundY(y + (d === 2 ? dist : d === 8 ? -dist : 0));
 	};
 	
+	Game_Map.prototype.isValid = function(x, y) {
+		const x2 = this.roundX(Math.floor(x));
+		const y2 = this.roundY(Math.floor(y));
+		const x3 = this.roundX(Math.ceil(x));
+		const y3 = this.roundY(Math.ceil(y));
+		
+		if(x2 !== x3 && y2 !== y3) {
+			return x2 >= 0 && x2 < this.width() && y2 >= 0 && y2 < this.height()
+				&& x2 >= 0 && x2 < this.width() && y3 >= 0 && y3 < this.height()
+				&& x3 >= 0 && x3 < this.width() && y2 >= 0 && y2 < this.height()
+				&& x3 >= 0 && x3 < this.width() && y3 >= 0 && y3 < this.height();
+		} else if(x2 !== x3) {
+			return x2 >= 0 && x2 < this.width() && y2 >= 0 && y2 < this.height()
+				&& x3 >= 0 && x3 < this.width() && y2 >= 0 && y2 < this.height();
+		} else if(y2 !== y3) {
+			return x2 >= 0 && x2 < this.width() && y2 >= 0 && y2 < this.height()
+				&& x2 >= 0 && x2 < this.width() && y3 >= 0 && y3 < this.height();
+		}
+		return x2 >= 0 && x2 < this.width() && y2 >= 0 && y2 < this.height();
+	};
+	
 	Game_Map.prototype.isPassable = function(x, y, d) {
-		let x2 = Math.ceil(x);
-		let y2 = Math.ceil(y);
-		x = Math.floor(x);
-		y = Math.floor(y);
+		const x2 = this.roundX(Math.floor(x));
+		const y2 = this.roundY(Math.floor(y));
+		const x3 = this.roundX(Math.ceil(x));
+		const y3 = this.roundY(Math.ceil(y));
 		
 		const bit = (1 << (d / 2 - 1)) & 0x0f;
-		if(x !== x2 && y !== y2) {
-			return this.checkPassage(x, y, bit)
-				&& this.checkPassage(x, y2, bit)
-				&& this.checkPassage(x2, y, bit)
-				&& this.checkPassage(x2, y2, bit);
-		} else if(x !== x2) {
-			return this.checkPassage(x, y, bit)
-				&& this.checkPassage(x2, y, bit);
-		} else if(y !== y2) {
-			return this.checkPassage(x, y, bit)
-				&& this.checkPassage(x, y2, bit);
+		if(x2 !== x3 && y2 !== y3) {
+			return this.checkPassage(x2, y2, bit)
+				&& this.checkPassage(x2, y3, bit)
+				&& this.checkPassage(x3, y2, bit)
+				&& this.checkPassage(x3, y3, bit);
+		} else if(x2 !== x3) {
+			return this.checkPassage(x2, y2, bit)
+				&& this.checkPassage(x3, y2, bit);
+		} else if(y2 !== y3) {
+			return this.checkPassage(x2, y2, bit)
+				&& this.checkPassage(x2, y3, bit);
 		}
-		return this.checkPassage(x, y, bit);
+		return this.checkPassage(x2, y2, bit);
 	};
 	
 	// Game CharacterBase
@@ -93,7 +114,7 @@
 		const dist = this.distancePerFrame();
 		const x2 = $gameMap.roundXWithDirection(x, horz, dist);
 		const y2 = $gameMap.roundYWithDirection(y, vert, dist);
-		return this.canPass(x, y, vert) && this.canPass(x, y2, horz) && this.canPass(x, y, horz) && this.canPass(x2, y, vert);
+		return this.canPass(x, y, vert) && this.canPass(x, y2, horz) && this.canPass(x2, y, vert);
 	};
 	
 	Game_CharacterBase.prototype.updateMove = function() {
@@ -129,6 +150,27 @@
 		return(this.checkEventTriggerTouch(x2, y2));
 	};
 	
+	Game_CharacterBase.prototype.moveFlush = function(d) {
+		switch(d) {
+		case 2:
+			this._realY = this._y;
+			this._y = $gameMap.roundY(Math.ceil(this._y));
+			break;
+		case 4:
+			this._realX = this._x;
+			this._x = $gameMap.roundX(Math.floor(this._x));
+			break;
+		case 6:
+			this._realX = this._x;
+			this._x = $gameMap.roundX(Math.ceil(this._x));
+			break;
+		case 8:
+			this._realY = this._y;
+			this._y = $gameMap.roundY(Math.floor(this._y));
+			break;
+		}
+	};
+	
 	Game_CharacterBase.prototype.moveStraight = function(d) {
 		this.setMovementSuccess(this.canPass(this._x, this._y, d));
 		if (this.isMovementSucceeded()) {
@@ -141,6 +183,7 @@
 			this.increaseSteps();
 		} else {
 			this.setDirection(d);
+			this.moveFlush(d);
 			this.checkEventTriggerTouchFront(d);
 		}
 	};
@@ -150,10 +193,18 @@
 		if (this._direction === this.reverseDir(d)) {
 			this.setDirection(d);
 		}
-		this._x = $gameMap.roundXWithDirection(this._x, d, dist);
-		this._y = $gameMap.roundYWithDirection(this._y, d, dist);
-		this._realX = $gameMap.xWithDirection(this._x, this.reverseDir(d), dist);
-		this._realY = $gameMap.yWithDirection(this._y, this.reverseDir(d), dist);
+		switch(d) {
+		case 2:
+		case 8:
+			this._y = $gameMap.roundYWithDirection(this._y, d, dist);
+			this._realY = $gameMap.yWithDirection(this._y, this.reverseDir(d), dist);
+			break;
+		case 4:
+		case 6:
+			this._x = $gameMap.roundXWithDirection(this._x, d, dist);
+			this._realX = $gameMap.xWithDirection(this._x, this.reverseDir(d), dist);
+			break;
+		}
 		this.increaseSteps();
 	};
 	
@@ -180,15 +231,20 @@
 			this.setMovementSuccess(this.canPass(this._x, this._y, horz));
 			if (this.isMovementSucceeded()) {
 				this.moveStraightFromDiagonal(horz);
-			} else if(this.checkEventTriggerTouchFront(horz)) {
-				this.setDirection(horz);
 			} else {
+				if(this.checkEventTriggerTouchFront(horz)) {
+					this.setDirection(horz);
+				}
+				this.moveFlush(horz);
 				// try vertical
 				this.setMovementSuccess(this.canPass(this._x, this._y, vert));
 				if (this.isMovementSucceeded()) {
 					this.moveStraightFromDiagonal(vert);
-				} else if(this.checkEventTriggerTouchFront(vert)) {
-					this.setDirection(vert);
+				} else {
+					if(this.checkEventTriggerTouchFront(vert)) {
+						this.setDirection(vert);
+					}
+					this.moveFlush(vert);
 				}
 			}
 		}
@@ -219,16 +275,13 @@
 	};
 	
 	Game_Player.prototype.executeMove = function(direction) {
-		if(direction % 2) {
-			switch(direction) {
-			case 1: this.moveDiagonally(4, 2); break;
-			case 3: this.moveDiagonally(6, 2); break;
-			case 7: this.moveDiagonally(4, 8); break;
-			case 9: this.moveDiagonally(6, 8); break;
-			}
-		} else {
-			this.moveStraight(direction);
+		switch(direction) {
+		case 1: this.moveDiagonally(4, 2); return;
+		case 3: this.moveDiagonally(6, 2); return;
+		case 7: this.moveDiagonally(4, 8); return;
+		case 9: this.moveDiagonally(6, 8); return;
 		}
+		this.moveStraight(direction);
 	};
 	
 	Game_Player.prototype.checkEventTriggerTouch = function(x, y) {
@@ -256,6 +309,20 @@
 			this.gatherFollowers();
 		}
 		return this._vehicleGettingOff;
+	};
+	
+	Game_Player.prototype.moveStraight = function(d) {
+		if (this.canPass(this.x, this.y, d)) {
+			this._followers.updateMove();
+		}
+		Game_Character.prototype.moveStraight.call(this, d);
+	};
+
+	Game_Player.prototype.moveDiagonally = function(horz, vert) {
+		if (this.canPassDiagonally(this.x, this.y, horz, vert)) {
+			this._followers.updateMove();
+		}
+		Game_Character.prototype.moveDiagonally.call(this, horz, vert);
 	};
 	
 	// Game Vehicle
